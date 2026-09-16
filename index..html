@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulación Interactiva: Caudal y Área Bajo la Curva</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f4f7f6;
+      margin: 20px;
+      color: #333;
+    }
+    .card {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      max-width: 850px;
+      margin: auto;
+    }
+    h2 {
+      margin-top: 0;
+      color: #0d5c75;
+    }
+    .controls {
+      margin: 20px 0;
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    select, button {
+      padding: 10px 14px;
+      font-size: 15px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+    select {
+      background: #fff;
+    }
+    button {
+      background-color: #0d5c75;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #094254;
+    }
+    svg {
+      width: 100%;
+      height: 380px;
+      background-color: #fafafa;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+    }
+    .results {
+      margin-top: 20px;
+      padding: 16px;
+      background-color: #eef7f9;
+      border-left: 5px solid #0d5c75;
+      border-radius: 4px;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+      font-size: 14px;
+    }
+    .data-table th, .data-table td {
+      border: 1px solid #ddd;
+      padding: 8px 12px;
+      text-align: center;
+    }
+    .data-table th {
+      background-color: #0d5c75;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2>Cálculo del Volumen Acumulado - Área Bajo la Curva</h2>
+  
+  <p>Selecciona el rango de integración para visualizar el área sombreada y calcular el volumen en metros cúbicos ($m^3$).</p>
+
+  <div class="controls">
+    <label for="intervalSelect"><strong>Intervalo de análisis:</strong></label>
+    <select id="intervalSelect" onchange="renderPlot()">
+      <option value="first">Primer Intervalo (0 h a 6 h)</option>
+      <option value="full" selected>Intervalo Completo (0 h a 36 h)</option>
+    </select>
+  </div>
+
+  <svg id="chart" viewBox="0 0 700 350"></svg>
+
+  <div class="results" id="resultsOutput"></div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Punto</th>
+        <th>Tiempo $t$ (horas)</th>
+        <th>Caudal $Q$ ($m^3/s$)</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<script>
+  // Datos originales de la Tabla 1
+  const dataset = [
+    { t: 0, q: 1162.18 },
+    { t: 6, q: 1173.05 },
+    { t: 12, q: 1108.83 },
+    { t: 24, q: 1213.33 },
+    { t: 30, q: 1265.22 },
+    { t: 36, q: 1228.10 }
+  ];
+
+  function renderTable() {
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+    dataset.forEach((d, i) => {
+      tbody.innerHTML += `<tr>
+        <td>P${i+1}</td>
+        <td>${d.t} h</td>
+        <td>${d.q.toLocaleString('es-ES', {minimumFractionDigits: 2})} m³/s</td>
+      </tr>`;
+    });
+  }
+
+  function renderPlot() {
+    const svg = document.getElementById('chart');
+    const mode = document.getElementById('intervalSelect').value;
+    
+    // Dimensiones y márgenes del gráfico SVG
+    const width = 700, height = 350;
+    const margin = { top: 30, right: 30, bottom: 50, left: 70 };
+    const chartW = width - margin.left - margin.right;
+    const chartH = height - margin.top - margin.bottom;
+
+    // Dominios
+    const maxT = 36;
+    const minQ = 1000, maxQ = 1350;
+
+    // Escalas de proyección de datos a coordenadas SVG
+    const scaleX = t => margin.left + (t / maxT) * chartW;
+    const scaleY = q => margin.top + chartH - ((q - minQ) / (maxQ - minQ)) * chartH;
+
+    let svgHtml = '';
+
+    // Ejes verticales y horizontales
+    svgHtml += `<line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" stroke="#333" stroke-width="2"/>`;
+    svgHtml += `<line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" stroke="#333" stroke-width="2"/>`;
+
+    // Grilla horizontal (Caudal)
+    for (let q = 1000; q <= 1350; q += 50) {
+      const y = scaleY(q);
+      svgHtml += `<line x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}" stroke="#e2e2e2" stroke-dasharray="3,3"/>`;
+      svgHtml += `<text x="${margin.left - 10}" y="${y + 4}" font-size="11" text-anchor="end" fill="#666">${q}</text>`;
+    }
+
+    // Grilla vertical (Tiempo)
+    for (let t = 0; t <= 36; t += 6) {
+      const x = scaleX(t);
+      svgHtml += `<line x1="${x}" y1="${margin.top}" x2="${x}" y2="${height - margin.bottom}" stroke="#e2e2e2" stroke-dasharray="3,3"/>`;
+      svgHtml += `<text x="${x}" y="${height - margin.bottom + 20}" font-size="11" text-anchor="middle" fill="#666">${t}h</text>`;
+    }
+
+    // Etiquetas de los ejes
+    svgHtml += `<text x="${width/2}" y="${height - 10}" font-size="12" font-weight="bold" text-anchor="middle">Tiempo t (horas)</text>`;
+    svgHtml += `<text x="-${height/2}" y="20" font-size="12" font-weight="bold" text-anchor="middle" transform="rotate(-90)">Caudal Q (m³/s)</text>`;
+
+    // Determinar puntos del subconjunto a integrar
+    let subData = [];
+    if (mode === 'first') {
+      subData = dataset.slice(0, 2); // De t=0 a t=6
+    } else {
+      subData = dataset; // Todos los datos (t=0 a t=36)
+    }
+
+    // Área sombreada bajo la curva
+    let areaPath = `M ${scaleX(subData[0].t)} ${scaleY(minQ)}`;
+    subData.forEach(d => {
+      areaPath += ` L ${scaleX(d.t)} ${scaleY(d.q)}`;
+    });
+    areaPath += ` L ${scaleX(subData[subData.length - 1].t)} ${scaleY(minQ)} Z`;
+    
+    svgHtml += `<path d="${areaPath}" fill="rgba(13, 92, 117, 0.3)" stroke="none"/>`;
+
+    // Segmentos rectos entre todos los puntos
+    let linePath = `M ${scaleX(dataset[0].t)} ${scaleY(dataset[0].q)}`;
+    for (let i = 1; i < dataset.length; i++) {
+      linePath += ` L ${scaleX(dataset[i].t)} ${scaleY(dataset[i].q)}`;
+    }
+    svgHtml += `<path d="${linePath}" fill="none" stroke="#0d5c75" stroke-width="3"/>`;
+
+    // Dibujar puntos
+    dataset.forEach(d => {
+      svgHtml += `<circle cx="${scaleX(d.t)}" cy="${scaleY(d.q)}" r="5" fill="#d9534f" stroke="#fff" stroke-width="1.5"/>`;
+    });
+
+    svg.innerHTML = svgHtml;
+
+    // Cálculo numérico del área / volumen por regla de trapecios
+    let volM3 = 0;
+    for (let i = 0; i < subData.length - 1; i++) {
+      const dt_sec = (subData[i+1].t - subData[i].t) * 3600; // conversión de horas a segundos
+      const q_avg = (subData[i].q + subData[i+1].q) / 2;
+      volM3 += q_avg * dt_sec;
+    }
+
+    // Mostrar resultados
+    const resDiv = document.getElementById('resultsOutput');
+    const labelInt = mode === 'first' ? 'Primer Intervalo (0 h - 6 h)' : 'Intervalo Completo (0 h - 36 h)';
+    resDiv.innerHTML = `
+      <strong>Planteamiento de la Integral Acumulada:</strong> $V = \\int_{t_a}^{t_b} Q(t) dt$<br>
+      <strong>Rango seleccionado:</strong> ${labelInt}<br>
+      <strong>Volumen calculado ($area$ bajo la curva):</strong> <span style="font-size: 18px; font-weight: bold; color: #0d5c75;">${volM3.toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 2})} m³</span>
+    `;
+  }
+
+  renderTable();
+  renderPlot();
+</script>
+
+</body>
+</html>
